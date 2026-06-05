@@ -8,6 +8,7 @@ export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
     log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
+    datasources: process.env.DATABASE_URL ? undefined : { db: { url: "postgresql://mock:mock@localhost/mock" } },
   });
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;

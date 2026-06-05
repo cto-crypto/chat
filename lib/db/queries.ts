@@ -1,8 +1,37 @@
-import { prisma } from "@/lib/db/client";
-import { Prisma } from "@prisma/client";
+import {
+  MOCK_ACTIVITY,
+  MOCK_CASES,
+  MOCK_CASES_BY_STATUS,
+  MOCK_CONTACTS,
+  MOCK_DASHBOARD_STATS,
+  MOCK_DOCUMENTS,
+  MOCK_PROFILES,
+  MOCK_PROPERTIES,
+  MOCK_PROPERTIES_BY_BOROUGH,
+  MOCK_TASKS,
+  MOCK_TENANTS,
+  MOCK_VOUCHER_DISTRIBUTION,
+} from "@/lib/db/mock-data";
+
+const USE_MOCK = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+
+// Lazy-load prisma only when not in mock mode to avoid connection errors
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _prisma: any = null;
+async function getPrisma() {
+  if (!_prisma) {
+    const { prisma } = await import("@/lib/db/client");
+    _prisma = prisma;
+  }
+  return _prisma;
+}
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import type { Prisma } from "@prisma/client";
 
 // Dashboard stats
 export async function getDashboardStats() {
+  if (USE_MOCK) return MOCK_DASHBOARD_STATS;
+  const prisma = await getPrisma();
   const [
     totalContacts,
     activeTenants,
@@ -52,6 +81,8 @@ export async function getDashboardStats() {
 }
 
 export async function getCasesByStatus() {
+  if (USE_MOCK) return MOCK_CASES_BY_STATUS;
+  const prisma = await getPrisma();
   return prisma.housingCase.groupBy({
     by: ["status"],
     _count: { id: true },
@@ -60,6 +91,8 @@ export async function getCasesByStatus() {
 }
 
 export async function getPropertiesByBorough() {
+  if (USE_MOCK) return MOCK_PROPERTIES_BY_BOROUGH;
+  const prisma = await getPrisma();
   return prisma.property.groupBy({
     by: ["borough"],
     _count: { id: true },
@@ -68,6 +101,8 @@ export async function getPropertiesByBorough() {
 }
 
 export async function getVoucherSizeDistribution() {
+  if (USE_MOCK) return MOCK_VOUCHER_DISTRIBUTION;
+  const prisma = await getPrisma();
   return prisma.tenant.groupBy({
     by: ["voucherSize"],
     _count: { id: true },
@@ -77,6 +112,8 @@ export async function getVoucherSizeDistribution() {
 }
 
 export async function getRecentActivity(limit = 20) {
+  if (USE_MOCK) return MOCK_ACTIVITY.slice(0, limit);
+  const prisma = await getPrisma();
   return prisma.activityLog.findMany({
     include: { actor: { select: { fullName: true, avatarUrl: true } } },
     orderBy: { createdAt: "desc" },
@@ -85,6 +122,10 @@ export async function getRecentActivity(limit = 20) {
 }
 
 export async function getUpcomingTasks(limit = 10) {
+  if (USE_MOCK) {
+    return MOCK_TASKS.filter((t) => t.status !== "OVERDUE" && t.status !== "COMPLETED").slice(0, limit);
+  }
+  const prisma = await getPrisma();
   return prisma.task.findMany({
     where: {
       status: { in: ["PENDING", "IN_PROGRESS"] },
@@ -101,6 +142,12 @@ export async function getUpcomingTasks(limit = 10) {
 }
 
 export async function getUrgentCases(limit = 10) {
+  if (USE_MOCK) {
+    return MOCK_CASES.filter(
+      (c) => ["HIGH", "CRITICAL"].includes(c.priority) && !["HOUSED", "CLOSED", "LOST"].includes(c.status)
+    ).slice(0, limit);
+  }
+  const prisma = await getPrisma();
   return prisma.housingCase.findMany({
     where: {
       priority: { in: ["HIGH", "CRITICAL"] },
@@ -126,8 +173,21 @@ export async function getContacts(params: {
   page?: number;
   limit?: number;
 }) {
+  if (USE_MOCK) {
+    const { search, contactType, status, borough, page = 1, limit = 50 } = params;
+    let results = [...MOCK_CONTACTS];
+    if (search) results = results.filter((c) => c.fullName.toLowerCase().includes(search.toLowerCase()) || c.email.toLowerCase().includes(search.toLowerCase()));
+    if (contactType) results = results.filter((c) => c.contactType === contactType);
+    if (status) results = results.filter((c) => c.status === status);
+    if (borough) results = results.filter((c) => c.borough === borough);
+    const total = results.length;
+    const skip = (page - 1) * limit;
+    return { contacts: results.slice(skip, skip + limit), total, pages: Math.ceil(total / limit) };
+  }
+
   const { search, contactType, status, borough, page = 1, limit = 50 } = params;
   const skip = (page - 1) * limit;
+  const prisma = await getPrisma();
 
   const where: Prisma.ContactWhereInput = {};
   if (search) {
@@ -145,12 +205,7 @@ export async function getContacts(params: {
   const [contacts, total] = await Promise.all([
     prisma.contact.findMany({
       where,
-      include: {
-        tenant: true,
-        landlord: true,
-        broker: true,
-        caseworker: true,
-      },
+      include: { tenant: true, landlord: true, broker: true, caseworker: true },
       orderBy: { updatedAt: "desc" },
       skip,
       take: limit,
@@ -162,6 +217,12 @@ export async function getContacts(params: {
 }
 
 export async function getContactById(id: string) {
+  if (USE_MOCK) {
+    const c = MOCK_CONTACTS.find((x) => x.id === id);
+    if (!c) return null;
+    return { ...c, contactNotes: [], contactTasks: [], contactDocs: [], housingCases: MOCK_CASES.filter((cs) => cs.tenant?.contact?.id === id) };
+  }
+  const prisma = await getPrisma();
   return prisma.contact.findUnique({
     where: { id },
     include: {
@@ -179,14 +240,8 @@ export async function getContactById(id: string) {
         orderBy: { dueDate: "asc" },
         take: 10,
       },
-      contactDocs: {
-        orderBy: { uploadedAt: "desc" },
-        take: 20,
-      },
-      housingCases: {
-        orderBy: { updatedAt: "desc" },
-        take: 5,
-      },
+      contactDocs: { orderBy: { uploadedAt: "desc" }, take: 20 },
+      housingCases: { orderBy: { updatedAt: "desc" }, take: 5 },
     },
   });
 }
@@ -201,8 +256,22 @@ export async function getTenants(params: {
   page?: number;
   limit?: number;
 }) {
+  if (USE_MOCK) {
+    const { search, status, urgency, borough, voucherSize, page = 1, limit = 50 } = params;
+    let results = [...MOCK_TENANTS];
+    if (search) results = results.filter((t) => t.contact.fullName.toLowerCase().includes(search.toLowerCase()));
+    if (status) results = results.filter((t) => t.tenantStatus === status);
+    if (urgency) results = results.filter((t) => t.urgencyLevel === urgency);
+    if (borough) results = results.filter((t) => t.preferredBoroughs.includes(borough));
+    if (voucherSize) results = results.filter((t) => t.voucherSize === voucherSize);
+    const total = results.length;
+    const skip = (page - 1) * limit;
+    return { tenants: results.slice(skip, skip + limit), total, pages: Math.ceil(total / limit) };
+  }
+
   const { search, status, urgency, borough, voucherSize, page = 1, limit = 50 } = params;
   const skip = (page - 1) * limit;
+  const prisma = await getPrisma();
 
   const where: Prisma.TenantWhereInput = {};
   if (search) {
@@ -237,16 +306,19 @@ export async function getTenants(params: {
 }
 
 export async function getTenantById(id: string) {
+  if (USE_MOCK) {
+    const t = MOCK_TENANTS.find((x) => x.id === id);
+    if (!t) return null;
+    return { ...t, housingCases: MOCK_CASES.filter((c) => c.tenantId === id), tenantNotes: [], tenantTasks: [], documents: [] };
+  }
+  const prisma = await getPrisma();
   return prisma.tenant.findUnique({
     where: { id },
     include: {
       contact: true,
       assignedCaseworker: { include: { contact: true } },
       housingCases: {
-        include: {
-          property: true,
-          assignedStaff: { select: { fullName: true } },
-        },
+        include: { property: true, assignedStaff: { select: { fullName: true } } },
         orderBy: { updatedAt: "desc" },
       },
       tenantNotes: {
@@ -276,8 +348,24 @@ export async function getProperties(params: {
   page?: number;
   limit?: number;
 }) {
+  if (USE_MOCK) {
+    const { search, status, borough, bedrooms, minRent, maxRent, voucherAccepted, page = 1, limit = 50 } = params;
+    let results = [...MOCK_PROPERTIES];
+    if (search) results = results.filter((p) => p.address.toLowerCase().includes(search.toLowerCase()) || p.neighborhood.toLowerCase().includes(search.toLowerCase()));
+    if (status) results = results.filter((p) => p.status === status);
+    if (borough) results = results.filter((p) => p.borough === borough);
+    if (bedrooms !== undefined) results = results.filter((p) => p.bedrooms === bedrooms);
+    if (voucherAccepted !== undefined) results = results.filter((p) => p.voucherAccepted === voucherAccepted);
+    if (minRent) results = results.filter((p) => p.rent >= minRent);
+    if (maxRent) results = results.filter((p) => p.rent <= maxRent);
+    const total = results.length;
+    const skip = (page - 1) * limit;
+    return { properties: results.slice(skip, skip + limit), total, pages: Math.ceil(total / limit) };
+  }
+
   const { search, status, borough, bedrooms, minRent, maxRent, voucherAccepted, page = 1, limit = 50 } = params;
   const skip = (page - 1) * limit;
+  const prisma = await getPrisma();
 
   const where: Prisma.PropertyWhereInput = {};
   if (search) {
@@ -315,6 +403,12 @@ export async function getProperties(params: {
 }
 
 export async function getPropertyById(id: string) {
+  if (USE_MOCK) {
+    const p = MOCK_PROPERTIES.find((x) => x.id === id);
+    if (!p) return null;
+    return { ...p, housingCases: MOCK_CASES.filter((c) => c.propertyId === id), propertyNotes: [], documents: [] };
+  }
+  const prisma = await getPrisma();
   return prisma.property.findUnique({
     where: { id },
     include: {
@@ -347,8 +441,20 @@ export async function getHousingCases(params: {
   page?: number;
   limit?: number;
 }) {
+  if (USE_MOCK) {
+    const { search, status, priority, page = 1, limit = 50 } = params;
+    let results = [...MOCK_CASES];
+    if (search) results = results.filter((c) => c.caseNumber.toLowerCase().includes(search.toLowerCase()) || c.caseSummary.toLowerCase().includes(search.toLowerCase()) || c.tenant.contact.fullName.toLowerCase().includes(search.toLowerCase()));
+    if (status) results = results.filter((c) => c.status === status);
+    if (priority) results = results.filter((c) => c.priority === priority);
+    const total = results.length;
+    const skip = (page - 1) * limit;
+    return { cases: results.slice(skip, skip + limit), total, pages: Math.ceil(total / limit) };
+  }
+
   const { search, status, priority, assignedStaffId, page = 1, limit = 50 } = params;
   const skip = (page - 1) * limit;
+  const prisma = await getPrisma();
 
   const where: Prisma.HousingCaseWhereInput = {};
   if (search) {
@@ -382,6 +488,12 @@ export async function getHousingCases(params: {
 }
 
 export async function getCaseById(id: string) {
+  if (USE_MOCK) {
+    const c = MOCK_CASES.find((x) => x.id === id);
+    if (!c) return null;
+    return { ...c, caseNotes: [], caseTasks: [], documents: [] };
+  }
+  const prisma = await getPrisma();
   return prisma.housingCase.findUnique({
     where: { id },
     include: {
@@ -416,8 +528,20 @@ export async function getTasks(params: {
   page?: number;
   limit?: number;
 }) {
+  if (USE_MOCK) {
+    const { search, status, priority, page = 1, limit = 50 } = params;
+    let results = [...MOCK_TASKS];
+    if (search) results = results.filter((t) => t.title.toLowerCase().includes(search.toLowerCase()));
+    if (status) results = results.filter((t) => t.status === status);
+    if (priority) results = results.filter((t) => t.priority === priority);
+    const total = results.length;
+    const skip = (page - 1) * limit;
+    return { tasks: results.slice(skip, skip + limit), total, pages: Math.ceil(total / limit) };
+  }
+
   const { search, status, priority, assignedToId, overdue, today, page = 1, limit = 50 } = params;
   const skip = (page - 1) * limit;
+  const prisma = await getPrisma();
 
   const where: Prisma.TaskWhereInput = {};
   if (search) where.title = { contains: search, mode: "insensitive" };
@@ -457,9 +581,9 @@ export async function getTasks(params: {
 
 // Profiles queries
 export async function getProfiles() {
-  return prisma.profile.findMany({
-    orderBy: { fullName: "asc" },
-  });
+  if (USE_MOCK) return MOCK_PROFILES;
+  const prisma = await getPrisma();
+  return prisma.profile.findMany({ orderBy: { fullName: "asc" } });
 }
 
 // Documents queries
@@ -470,14 +594,23 @@ export async function getDocuments(params: {
   page?: number;
   limit?: number;
 }) {
+  if (USE_MOCK) {
+    const { search, documentType, page = 1, limit = 50 } = params;
+    let results = [...MOCK_DOCUMENTS];
+    if (search) results = results.filter((d) => d.fileName.toLowerCase().includes(search.toLowerCase()));
+    if (documentType) results = results.filter((d) => d.documentType === documentType);
+    const total = results.length;
+    const skip = (page - 1) * limit;
+    return { documents: results.slice(skip, skip + limit), total, pages: Math.ceil(total / limit) };
+  }
+
   const { search, documentType, relatedEntityType, page = 1, limit = 50 } = params;
   const skip = (page - 1) * limit;
+  const prisma = await getPrisma();
 
   const where: Record<string, unknown> = {};
   if (documentType) where.documentType = documentType;
-  if (search) {
-    where.fileName = { contains: search, mode: "insensitive" };
-  }
+  if (search) where.fileName = { contains: search, mode: "insensitive" };
   if (relatedEntityType === "case") where.relatedCaseId = { not: null };
   else if (relatedEntityType === "property") where.relatedPropertyId = { not: null };
   else if (relatedEntityType === "tenant") where.relatedTenantId = { not: null };
@@ -504,6 +637,12 @@ export async function getDocuments(params: {
 
 // Matching tenants to properties
 export async function getMatchingProperties(tenantId: string) {
+  if (USE_MOCK) {
+    const tenant = MOCK_TENANTS.find((t) => t.id === tenantId);
+    if (!tenant) return [];
+    return MOCK_PROPERTIES.filter((p) => p.status === "AVAILABLE" && p.voucherAccepted && (!tenant.voucherSize || p.bedrooms === tenant.voucherSize) && (!tenant.maxRent || p.rent <= tenant.maxRent));
+  }
+  const prisma = await getPrisma();
   const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
   if (!tenant) return [];
 
