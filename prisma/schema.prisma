@@ -1,0 +1,452 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Profile {
+  id          String   @id @default(cuid())
+  authUserId  String   @unique @map("auth_user_id")
+  fullName    String   @map("full_name")
+  email       String   @unique
+  role        UserRole @default(STAFF)
+  avatarUrl   String?  @map("avatar_url")
+  phone       String?
+  status      String   @default("active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  assignedCases    HousingCase[] @relation("AssignedStaff")
+  tasks            Task[]        @relation("AssignedTasks")
+  createdTasks     Task[]        @relation("CreatedTasks")
+  notes            Note[]
+  activityLogs     ActivityLog[]
+  contacts         Contact[]
+
+  @@map("profiles")
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  MANAGER
+  STAFF
+  VIEWER
+}
+
+model Contact {
+  id                    String        @id @default(cuid())
+  fullName              String        @map("full_name")
+  contactType           ContactType   @default(OTHER) @map("contact_type")
+  phone                 String?
+  alternatePhone        String?       @map("alternate_phone")
+  email                 String?
+  address               String?
+  borough               String?
+  neighborhood          String?
+  organization          String?
+  preferredContactMethod String?      @map("preferred_contact_method")
+  status                ContactStatus @default(NEW)
+  tags                  String[]
+  source                String?
+  notes                 String?
+  createdById           String?       @map("created_by")
+  createdBy             Profile?      @relation(fields: [createdById], references: [id])
+  createdAt             DateTime      @default(now()) @map("created_at")
+  updatedAt             DateTime      @updatedAt @map("updated_at")
+
+  tenant      Tenant?
+  landlord    Landlord?
+  broker      Broker?
+  caseworker  Caseworker?
+  contactNotes    Note[]
+  contactTasks    Task[]
+  contactDocs     Document[]
+  housingCases    HousingCase[]
+
+  @@map("contacts")
+}
+
+enum ContactType {
+  TENANT
+  LANDLORD
+  BROKER
+  CASEWORKER
+  OTHER
+}
+
+enum ContactStatus {
+  NEW
+  ACTIVE
+  INACTIVE
+  FOLLOW_UP_NEEDED
+  ARCHIVED
+}
+
+model Tenant {
+  id                  String        @id @default(cuid())
+  contactId           String        @unique @map("contact_id")
+  contact             Contact       @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  voucherType         String?       @map("voucher_type")
+  voucherSize         Int?          @map("voucher_size")
+  voucherNumber       String?       @map("voucher_number")
+  householdSize       Int?          @map("household_size")
+  maxRent             Decimal?      @map("max_rent") @db.Decimal(10, 2)
+  preferredBoroughs   String[]      @map("preferred_boroughs")
+  preferredNeighborhoods String[]   @map("preferred_neighborhoods")
+  accessibilityNeeds  String?       @map("accessibility_needs")
+  pets                Boolean       @default(false)
+  moveInDeadline      DateTime?     @map("move_in_deadline")
+  urgencyLevel        UrgencyLevel  @default(MEDIUM) @map("urgency_level")
+  tenantStatus        TenantStatus  @default(NEW) @map("tenant_status")
+  assignedCaseworkerId String?      @map("assigned_caseworker_id")
+  assignedCaseworker  Caseworker?  @relation(fields: [assignedCaseworkerId], references: [id])
+  documentsComplete   Boolean       @default(false) @map("documents_complete")
+  missingDocuments    String[]      @map("missing_documents")
+  notes               String?
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
+
+  housingCases  HousingCase[]
+  tenantNotes   Note[]
+  tenantTasks   Task[]
+  documents     Document[]
+
+  @@map("tenants")
+}
+
+enum UrgencyLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TenantStatus {
+  NEW
+  SEARCHING
+  VIEWING
+  APPLICATION_SUBMITTED
+  INSPECTION_PENDING
+  APPROVED
+  HOUSED
+  INACTIVE
+}
+
+model Landlord {
+  id                   String   @id @default(cuid())
+  contactId            String   @unique @map("contact_id")
+  contact              Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  companyName          String?  @map("company_name")
+  portfolioSize        Int?     @map("portfolio_size")
+  section8Friendly     Boolean  @default(false) @map("section_8_friendly")
+  acceptsVouchers      Boolean  @default(false) @map("accepts_vouchers")
+  preferredContactMethod String? @map("preferred_contact_method")
+  paymentRequirements  String?  @map("payment_requirements")
+  notes                String?
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  properties    Property[]
+  housingCases  HousingCase[]
+
+  @@map("landlords")
+}
+
+model Broker {
+  id               String   @id @default(cuid())
+  contactId        String   @unique @map("contact_id")
+  contact          Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  brokerageName    String?  @map("brokerage_name")
+  licenseNumber    String?  @map("license_number")
+  serviceAreas     String[] @map("service_areas")
+  commissionNotes  String?  @map("commission_notes")
+  activeListingsCount Int?  @map("active_listings_count")
+  notes            String?
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  properties    Property[]
+  housingCases  HousingCase[]
+
+  @@map("brokers")
+}
+
+model Caseworker {
+  id           String   @id @default(cuid())
+  contactId    String   @unique @map("contact_id")
+  contact      Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  agencyName   String?  @map("agency_name")
+  caseloadCount Int?    @map("caseload_count")
+  specialization String?
+  notes        String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  assignedTenants Tenant[]
+  housingCases    HousingCase[]
+
+  @@map("caseworkers")
+}
+
+model Property {
+  id                   String          @id @default(cuid())
+  landlordId           String?         @map("landlord_id")
+  landlord             Landlord?       @relation(fields: [landlordId], references: [id])
+  brokerId             String?         @map("broker_id")
+  broker               Broker?         @relation(fields: [brokerId], references: [id])
+  propertyName         String?         @map("property_name")
+  address              String
+  borough              String
+  neighborhood         String?
+  zipCode              String?         @map("zip_code")
+  bedrooms             Int
+  bathrooms            Decimal?        @db.Decimal(3, 1)
+  rent                 Decimal         @db.Decimal(10, 2)
+  securityDeposit      Decimal?        @map("security_deposit") @db.Decimal(10, 2)
+  voucherAccepted      Boolean         @default(false) @map("voucher_accepted")
+  voucherTypesAccepted String[]        @map("voucher_types_accepted")
+  status               PropertyStatus  @default(AVAILABLE)
+  availabilityDate     DateTime?       @map("availability_date")
+  utilitiesIncluded    String[]        @map("utilities_included")
+  petPolicy            String?         @map("pet_policy")
+  accessibilityFeatures String[]       @map("accessibility_features")
+  elevator             Boolean         @default(false)
+  laundry              Boolean         @default(false)
+  parking              Boolean         @default(false)
+  photos               String[]
+  description          String?
+  internalNotes        String?         @map("internal_notes")
+  createdAt            DateTime        @default(now()) @map("created_at")
+  updatedAt            DateTime        @updatedAt @map("updated_at")
+
+  housingCases  HousingCase[]
+  propertyNotes Note[]
+  propertyTasks Task[]
+  documents     Document[]
+
+  @@map("properties")
+}
+
+enum PropertyStatus {
+  AVAILABLE
+  PENDING
+  INSPECTION_SCHEDULED
+  APPROVED
+  OCCUPIED
+  UNAVAILABLE
+}
+
+model HousingCase {
+  id                 String      @id @default(cuid())
+  caseNumber         String      @unique @map("case_number")
+  tenantId           String?     @map("tenant_id")
+  tenant             Tenant?     @relation(fields: [tenantId], references: [id])
+  propertyId         String?     @map("property_id")
+  property           Property?   @relation(fields: [propertyId], references: [id])
+  landlordId         String?     @map("landlord_id")
+  landlord           Landlord?   @relation(fields: [landlordId], references: [id])
+  brokerId           String?     @map("broker_id")
+  broker             Broker?     @relation(fields: [brokerId], references: [id])
+  caseworkerId       String?     @map("caseworker_id")
+  caseworker         Caseworker? @relation(fields: [caseworkerId], references: [id])
+  assignedStaffId    String?     @map("assigned_staff_id")
+  assignedStaff      Profile?    @relation("AssignedStaff", fields: [assignedStaffId], references: [id])
+  contactId          String?     @map("contact_id")
+  contact            Contact?    @relation(fields: [contactId], references: [id])
+  status             CaseStatus  @default(NEW)
+  priority           UrgencyLevel @default(MEDIUM)
+  moveInTargetDate   DateTime?   @map("move_in_target_date")
+  nextFollowUpDate   DateTime?   @map("next_follow_up_date")
+  lastContactedAt    DateTime?   @map("last_contacted_at")
+  caseSummary        String?     @map("case_summary")
+  blockers           String?
+  outcome            String?
+  createdAt          DateTime    @default(now()) @map("created_at")
+  updatedAt          DateTime    @updatedAt @map("updated_at")
+
+  caseNotes  Note[]
+  caseTasks  Task[]
+  documents  Document[]
+
+  @@map("housing_cases")
+}
+
+enum CaseStatus {
+  NEW
+  SEARCHING
+  VIEWING_SCHEDULED
+  APPLICATION_STARTED
+  DOCUMENTS_NEEDED
+  INSPECTION_PENDING
+  APPROVED
+  LEASE_SIGNING
+  HOUSED
+  CLOSED
+  LOST
+}
+
+model Task {
+  id               String       @id @default(cuid())
+  title            String
+  description      String?
+  relatedContactId String?      @map("related_contact_id")
+  relatedContact   Contact?     @relation(fields: [relatedContactId], references: [id])
+  relatedTenantId  String?      @map("related_tenant_id")
+  relatedTenant    Tenant?      @relation(fields: [relatedTenantId], references: [id])
+  relatedPropertyId String?     @map("related_property_id")
+  relatedProperty  Property?    @relation(fields: [relatedPropertyId], references: [id])
+  relatedCaseId    String?      @map("related_case_id")
+  relatedCase      HousingCase? @relation(fields: [relatedCaseId], references: [id])
+  assignedToId     String?      @map("assigned_to")
+  assignedTo       Profile?     @relation("AssignedTasks", fields: [assignedToId], references: [id])
+  dueDate          DateTime?    @map("due_date")
+  status           TaskStatus   @default(PENDING)
+  priority         UrgencyLevel @default(MEDIUM)
+  reminderEnabled  Boolean      @default(false) @map("reminder_enabled")
+  completedAt      DateTime?    @map("completed_at")
+  createdById      String?      @map("created_by")
+  createdBy        Profile?     @relation("CreatedTasks", fields: [createdById], references: [id])
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+
+  @@map("tasks")
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  OVERDUE
+  CANCELLED
+}
+
+model Note {
+  id               String    @id @default(cuid())
+  note             String
+  noteType         NoteType  @default(GENERAL) @map("note_type")
+  relatedContactId String?   @map("related_contact_id")
+  relatedContact   Contact?  @relation(fields: [relatedContactId], references: [id])
+  relatedTenantId  String?   @map("related_tenant_id")
+  relatedTenant    Tenant?   @relation(fields: [relatedTenantId], references: [id])
+  relatedPropertyId String?  @map("related_property_id")
+  relatedProperty  Property? @relation(fields: [relatedPropertyId], references: [id])
+  relatedCaseId    String?   @map("related_case_id")
+  relatedCase      HousingCase? @relation(fields: [relatedCaseId], references: [id])
+  createdById      String?   @map("created_by")
+  createdBy        Profile?  @relation(fields: [createdById], references: [id])
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  @@map("notes")
+}
+
+enum NoteType {
+  GENERAL
+  CALL
+  EMAIL
+  MEETING
+  SYSTEM
+  STATUS_UPDATE
+}
+
+model Document {
+  id               String       @id @default(cuid())
+  fileName         String       @map("file_name")
+  fileUrl          String       @map("file_url")
+  fileType         String       @map("file_type")
+  fileSize         Int?         @map("file_size")
+  documentType     DocumentType @default(OTHER) @map("document_type")
+  relatedContactId String?      @map("related_contact_id")
+  relatedContact   Contact?     @relation(fields: [relatedContactId], references: [id])
+  relatedTenantId  String?      @map("related_tenant_id")
+  relatedTenant    Tenant?      @relation(fields: [relatedTenantId], references: [id])
+  relatedPropertyId String?     @map("related_property_id")
+  relatedProperty  Property?    @relation(fields: [relatedPropertyId], references: [id])
+  relatedCaseId    String?      @map("related_case_id")
+  relatedCase      HousingCase? @relation(fields: [relatedCaseId], references: [id])
+  uploadedById     String?      @map("uploaded_by")
+  uploadedAt       DateTime     @default(now()) @map("uploaded_at")
+
+  @@map("documents")
+}
+
+enum DocumentType {
+  VOUCHER
+  ID
+  LEASE
+  INSPECTION
+  APPLICATION
+  INCOME_PROOF
+  UTILITY_BILL
+  OTHER
+}
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  actorId    String?  @map("actor_id")
+  actor      Profile? @relation(fields: [actorId], references: [id])
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  oldValues  Json?    @map("old_values")
+  newValues  Json?    @map("new_values")
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("activity_logs")
+}
+
+model Integration {
+  id         String   @id @default(cuid())
+  provider   String
+  name       String
+  status     String   @default("inactive")
+  configJson Json?    @map("config_json")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("integrations")
+}
+
+model Webhook {
+  id              String   @id @default(cuid())
+  name            String
+  endpointUrl     String   @map("endpoint_url")
+  secret          String
+  eventTypes      String[] @map("event_types")
+  isActive        Boolean  @default(true) @map("is_active")
+  lastTriggeredAt DateTime? @map("last_triggered_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@map("webhooks")
+}
+
+model AutomationRule {
+  id             String   @id @default(cuid())
+  name           String
+  triggerType    String   @map("trigger_type")
+  conditionsJson Json?    @map("conditions_json")
+  actionsJson    Json?    @map("actions_json")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("automation_rules")
+}
+
+model Backup {
+  id          String   @id @default(cuid())
+  backupType  String   @map("backup_type")
+  status      String
+  fileUrl     String?  @map("file_url")
+  startedAt   DateTime @default(now()) @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  createdById String?  @map("created_by")
+
+  @@map("backups")
+}
