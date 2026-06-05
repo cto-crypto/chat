@@ -1,5 +1,10 @@
-import { createServerClient } from "@supabase/ssr";
-import { NextResponse, type NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { jwtVerify } from "jose";
+
+const DEMO_COOKIE = "keevos-demo-session";
+const SECRET = new TextEncoder().encode(
+  process.env.DEMO_SESSION_SECRET || "keevos-demo-session-secret-32chars"
+);
 
 const PROTECTED_PREFIXES = [
   "/dashboard",
@@ -21,69 +26,41 @@ const PROTECTED_PREFIXES = [
   "/caseworkers",
 ];
 
-const PUBLIC_PATHS = ["/login", "/register", "/health"];
-
-function isPublicPath(pathname: string): boolean {
-  if (PUBLIC_PATHS.includes(pathname)) return true;
-  if (pathname.startsWith("/api/")) return true;
-  if (pathname.startsWith("/_next/")) return true;
-  if (pathname.startsWith("/favicon")) return true;
-  return false;
+function isProtected(pathname: string) {
+  return PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
 }
 
-function isProtectedPath(pathname: string): boolean {
-  return PROTECTED_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+function isPublic(pathname: string) {
+  return (
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/register") ||
+    pathname.startsWith("/api/") ||
+    pathname.startsWith("/_next/") ||
+    pathname.startsWith("/favicon")
+  );
 }
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Always allow public paths
-  if (isPublicPath(pathname)) {
+  if (isPublic(pathname) || !isProtected(pathname)) {
     return NextResponse.next();
   }
 
-  // Only enforce auth on protected paths
-  if (!isProtectedPath(pathname)) {
-    return NextResponse.next();
-  }
-
-  let response = NextResponse.next({
-    request,
-  });
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          );
-          response = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options)
-          );
-        },
-      },
+  // Check demo session cookie
+  const token = request.cookies.get(DEMO_COOKIE)?.value;
+  if (token) {
+    try {
+      await jwtVerify(token, SECRET);
+      return NextResponse.next();
+    } catch {
+      // expired / invalid — fall through
     }
-  );
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("redirectTo", pathname);
-    return NextResponse.redirect(loginUrl);
   }
 
-  return response;
+  const loginUrl = new URL("/login", request.url);
+  loginUrl.searchParams.set("redirectTo", pathname);
+  return NextResponse.redirect(loginUrl);
 }
 
 export const config = {

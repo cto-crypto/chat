@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { getInitials } from "@/lib/utils";
 import {
@@ -42,8 +41,7 @@ export function Header({
   async function handleSignOut() {
     setSigningOut(true);
     try {
-      const supabase = createClient();
-      await supabase.auth.signOut();
+      await fetch("/api/demo-login", { method: "DELETE" });
       router.push("/login");
       router.refresh();
     } catch {
