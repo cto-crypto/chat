@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  overscroll-behavior: none;
+}
+
 @layer base {
   :root {
     /* KeevOS Brand: soft cream background, dark green foreground */
