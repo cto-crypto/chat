@@ -1,19 +1,18 @@
 #!/bin/bash
 set -e
 
-# prisma generate only needs a valid URL format — use fallback if DATABASE_URL missing
-export DATABASE_URL="${DATABASE_URL:-postgresql://fake:fake@localhost:5432/fake}"
+DB_URL="${DATABASE_URL:-postgresql://fake:fake@localhost:5432/fake}"
 
-echo "→ Running prisma generate..."
-./node_modules/.bin/prisma generate
+echo "→ prisma generate..."
+DATABASE_URL="$DB_URL" ./node_modules/.bin/prisma generate
 
-# Only push schema if we have a real (non-fake) DATABASE_URL
-if [[ "$DATABASE_URL" != *"fake"* ]]; then
-  echo "→ Running prisma db push..."
-  ./node_modules/.bin/prisma db push --accept-data-loss
+if [ -n "$DATABASE_URL" ] && [[ "$DATABASE_URL" != *"fake"* ]]; then
+  echo "→ prisma db push (applying schema to Neon)..."
+  ./node_modules/.bin/prisma db push --url="$DATABASE_URL" --accept-data-loss --skip-generate
+  echo "→ Schema applied successfully"
 else
-  echo "→ Skipping prisma db push (no real DATABASE_URL)"
+  echo "→ Skipping db push (no real DATABASE_URL)"
 fi
 
-echo "→ Running next build..."
+echo "→ next build..."
 ./node_modules/.bin/next build
