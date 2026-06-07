@@ -1,0 +1,91 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  overscroll-behavior: none;
+}
+
+@layer base {
+  :root {
+    /* KeevOS Brand: soft cream background, dark green foreground */
+    --background: 40 30% 96%;       /* #f7f4ef */
+    --foreground: 120 22% 13%;      /* #1a2b1a */
+
+    --card: 0 0% 100%;              /* white cards */
+    --card-foreground: 120 22% 13%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 120 22% 13%;
+
+    --primary: 120 22% 13%;         /* dark green #1a2b1a */
+    --primary-foreground: 40 30% 96%;
+
+    --secondary: 120 10% 90%;       /* light sage */
+    --secondary-foreground: 120 22% 13%;
+
+    --muted: 40 20% 92%;
+    --muted-foreground: 120 10% 40%;
+
+    --accent: 123 43% 49%;          /* green #4caf50 */
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 120 8% 82%;           /* light gray border */
+    --input: 120 8% 82%;
+    --ring: 120 22% 13%;
+
+    --radius: 0.5rem;
+
+    /* Toast */
+    --toast-background: 0 0% 100%;
+    --toast-foreground: 120 22% 13%;
+    --toast-border: 120 8% 82%;
+  }
+
+  .dark {
+    --background: 120 22% 8%;
+    --foreground: 40 30% 96%;
+
+    --card: 120 22% 11%;
+    --card-foreground: 40 30% 96%;
+
+    --popover: 120 22% 11%;
+    --popover-foreground: 40 30% 96%;
+
+    --primary: 123 43% 49%;
+    --primary-foreground: 120 22% 8%;
+
+    --secondary: 120 15% 18%;
+    --secondary-foreground: 40 30% 96%;
+
+    --muted: 120 15% 18%;
+    --muted-foreground: 120 10% 60%;
+
+    --accent: 123 43% 49%;
+    --accent-foreground: 120 22% 8%;
+
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 120 15% 20%;
+    --input: 120 15% 20%;
+    --ring: 123 43% 49%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
