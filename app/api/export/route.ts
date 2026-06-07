@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/client";
-import { createClient } from "@/lib/supabase/server";
+import { getDemoSession } from "@/lib/demo-auth/session";
 import Papa from "papaparse";
 
 export async function GET(request: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getDemoSession();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
@@ -13,7 +12,7 @@ export async function GET(request: NextRequest) {
   const format = searchParams.get("format") || "csv";
 
   let data: Record<string, unknown>[] = [];
-  let filename = `keevos-${type}-export`;
+  const filename = `keevos-${type}-export`;
 
   try {
     switch (type) {
@@ -35,7 +34,7 @@ export async function GET(request: NextRequest) {
         }));
         break;
 
-      case "tenants":
+      case "tenants": {
         const tenants = await prisma.tenant.findMany({
           include: { contact: true },
           orderBy: { createdAt: "desc" },
@@ -56,8 +55,9 @@ export async function GET(request: NextRequest) {
           created_at: t.createdAt.toISOString(),
         }));
         break;
+      }
 
-      case "properties":
+      case "properties": {
         const properties = await prisma.property.findMany({ orderBy: { createdAt: "desc" } });
         data = properties.map(p => ({
           id: p.id,
@@ -73,8 +73,9 @@ export async function GET(request: NextRequest) {
           created_at: p.createdAt.toISOString(),
         }));
         break;
+      }
 
-      case "cases":
+      case "cases": {
         const cases = await prisma.housingCase.findMany({
           include: { tenant: { include: { contact: true } } },
           orderBy: { createdAt: "desc" },
@@ -90,6 +91,7 @@ export async function GET(request: NextRequest) {
           created_at: c.createdAt.toISOString(),
         }));
         break;
+      }
 
       default:
         return NextResponse.json({ error: "Invalid export type" }, { status: 400 });

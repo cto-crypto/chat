@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/client";
 import { TaskSchema } from "@/lib/validations/schemas";
-import { createClient } from "@/lib/supabase/server";
+import { getDemoSession } from "@/lib/demo-auth/session";
 import { logActivity } from "@/lib/audit";
 
 export async function GET(request: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getDemoSession();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
@@ -36,11 +35,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getDemoSession();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const profile = await prisma.profile.findUnique({ where: { authUserId: user.id } });
+  const profile = await prisma.profile.findUnique({ where: { authUserId: user.id } }).catch(() => null);
 
   try {
     const body = await request.json();
@@ -70,11 +68,10 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getDemoSession();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const profile = await prisma.profile.findUnique({ where: { authUserId: user.id } });
+  const profile = await prisma.profile.findUnique({ where: { authUserId: user.id } }).catch(() => null);
 
   const body = await request.json();
   const { id, ...updates } = body;

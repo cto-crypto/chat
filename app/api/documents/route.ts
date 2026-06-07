@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/client";
-import { createClient } from "@/lib/supabase/server";
+import { getDemoSession } from "@/lib/demo-auth/session";
 import { logActivity } from "@/lib/audit";
 import { z } from "zod";
 
@@ -28,8 +28,7 @@ const DocumentUploadSchema = z.object({
 });
 
 export async function GET(request: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getDemoSession();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
@@ -50,11 +49,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getDemoSession();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const profile = await prisma.profile.findUnique({ where: { authUserId: user.id } });
+  const profile = await prisma.profile.findUnique({ where: { authUserId: user.id } }).catch(() => null);
 
   try {
     const body = await request.json();
@@ -89,14 +87,14 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getDemoSession();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const profile = await prisma.profile.findUnique({ where: { authUserId: user.id } });
-  if (!profile || !["OWNER", "ADMIN", "MANAGER"].includes(profile.role)) {
+  if (!["OWNER", "ADMIN", "MANAGER"].includes(user.role)) {
     return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 });
   }
+
+  const profile = await prisma.profile.findUnique({ where: { authUserId: user.id } }).catch(() => null);
 
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
@@ -105,7 +103,7 @@ export async function DELETE(request: NextRequest) {
   await prisma.document.delete({ where: { id } });
 
   await logActivity({
-    actorId: profile.id,
+    actorId: profile?.id,
     action: "document.deleted",
     entityType: "document",
     entityId: id,
