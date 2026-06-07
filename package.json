@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "postinstall": "node -e \"const u=process.env.DATABASE_URL;if(u){require('fs').writeFileSync('prisma/.env','DATABASE_URL='+u+'\\n');console.log('prisma/.env written')}\"",
     "dev": "next dev",
     "build": "DATABASE_URL=${DATABASE_URL:-postgresql://fake:fake@localhost:5432/fake} prisma generate && next build",
     "start": "next start",
